@@ -11,38 +11,78 @@ import datetime
 
 class MedicalRecord:
     
-    def __init__(self, id, func_date, prescription_records = [], diagnosis_records = []):
+
+    def __init__(self, id, func_date, prescription_records = None, diagnosis_records = None):
         
-        self.id = id
-        self.func_date = func_date
-        self.prescription_records = prescription_records
-        self.diagnosis_records = diagnosis_records
-    
+        self.__id = id
+
+        if type(func_date) is str:
+            self.__func_date = datetime.datetime.strptime(func_date, "%Y-%m-%d")
+        elif type(func_date) is datetime.datetime:
+            self.__func_date = func_date
+
+        if prescription_records == None:
+            self.__prescription_records = set()
+        else:
+            self.__prescription_records = set(prescription_records)
+
+        if diagnosis_records == None:
+            self.__diagnosis_records = set()
+        else:
+            self.__diagnosis_records = set(diagnosis_records)
+
+    def get_id(self):
+        return self.__id
+
+    def get_func_date(self):
+        return self.__func_date
     
     def add_prescription_record(self, prescription_record):
         
-        self.prescription_records.append(prescription_record)
+        self.__prescription_records.add(prescription_record)
     
     
     def add_diagnosis_record(self, diagnosis_record):
         
-        self.diagnosis_records.append(diagnosis_record)
+        self.__diagnosis_records.add(diagnosis_record)
+    
+
+    def extend_prescription_records(self, prescription_records):
+        
+        for prescription_record in prescription_records:
+            self.__prescription_records.add(prescription_record)
+
+
+    def extend_diagnosis_records(self, diagnosis_records):
+        
+        for diagnosis_record in diagnosis_records:
+            self.__diagnosis_records.add(diagnosis_record)
+
+    
+    def write(self, file_path):
+        with open(file_path, "a") as file:
+            file.write(self.__id + "," + str(self.__func_date.strftime('%Y-%m-%d')) + "\n")
+            file.write(",".join(sorted(self.__prescription_records)) + "\n")
+            file.write(",".join(sorted(self.__diagnosis_records)) + "\n") 
+    
+    
+    def display(self):
+        print "%s" % (self.__id + "," + str(self.__func_date.strftime('%Y-%m-%d')))
+        print "%s" % (",".join(sorted(self.__prescription_records)))
+        print "%s" % (",".join(sorted(self.__diagnosis_records)))
 
 
 
 class LongitudeObservationalDatabase:
     
-    def __init__(self, host_address, user_name, password, database_name):
+    def __init__(self, host_address = None, user_name = None, password = None, database_name = None):
         
         self.host_address = host_address
         self.user_name = user_name
         self.password = password
         self.database_name = database_name
-        self.database = MySQLdb.connect(host = self.host_address, 
-		                     user = self.user_name, 
-		                     passwd = self.password, 
-		                     db = self.database_name)
-        
+        self.database = None
+
         # key: <type: string> drug_no
         # value : <type: string> atc_code
         self.drug_no_atc_code_hash_map = {}
@@ -54,7 +94,16 @@ class LongitudeObservationalDatabase:
         # key: <type: string> id
         # value: <type: MedicalRecord>
         self.id_medical_records_hash_map = {}
-        
+
+        if (self.host_address is not None) and (self.user_name is not None) and (self.password is not None) and (self.database_name is not None):
+            self.set_up()
+
+    def set_up(self):
+
+        self.database = MySQLdb.connect(host = self.host_address, 
+		                     user = self.user_name, 
+		                     passwd = self.password, 
+		                     db = self.database_name)
         self.build_drug_no_atc_code_hash_map()
         self.add_prescription_records_to_id_func_date_medical_record_hash_map()
         self.add_diagnosis_records_to_id_func_date_medical_record_hash_map()
@@ -103,9 +152,10 @@ class LongitudeObservationalDatabase:
     	for row in sql_results:
             id = row[0].strip()
             func_date = row[1]
-            medical_record = self.id_func_date_medical_record_hash_map.get(id + "," + str(func_date), MedicalRecord(id, func_date))
+            key = id + "," + str(func_date)
+            medical_record = self.id_func_date_medical_record_hash_map.get(key, MedicalRecord(id, func_date))
             medical_record.add_prescription_record(row[2].strip()) # drug_no
-            self.id_func_date_medical_record_hash_map[id + "," + str(func_date)] = medical_record    
+            self.id_func_date_medical_record_hash_map[key] = medical_record    
 
 
     def add_diagnosis_records_to_id_func_date_medical_record_hash_map(self):
@@ -118,10 +168,21 @@ class LongitudeObservationalDatabase:
     	for row in sql_results:
             id = row[0].strip()
             func_date = row[1]
-            medical_record = self.id_func_date_medical_record_hash_map.get(id + "," + str(func_date), MedicalRecord(id, func_date))
+            key = id + "," + str(func_date)
+            medical_record = self.id_func_date_medical_record_hash_map.get(key, MedicalRecord(id, func_date))
             for i in range(2, 5, 1):
-                medical_record.add_diagnosis_record(row[i].strip()) # acode_icd9
-            self.id_func_date_medical_record_hash_map[id + "," + str(func_date)] = medical_record    
+                acode_icd9 = row[i].strip() # acode_icd9
+                if len(acode_icd9) > 0:
+                     medical_record.add_diagnosis_record(acode_icd9)
+            self.id_func_date_medical_record_hash_map[key] = medical_record    
+    
+    
+    def add_medical_record_to_id_medical_records_hash_map(self, medical_record):
+
+        id = medical_record.get_id()
+        medical_records = self.id_medical_records_hash_map.get(id, [])
+        medical_records.append(medical_record)
+        self.id_medical_records_hash_map[id] = medical_records    
     
     
     def build_id_medical_records_hash_map(self):
@@ -134,9 +195,9 @@ class LongitudeObservationalDatabase:
             medical_records = self.id_medical_records_hash_map.get(id, [])
             medical_records.append(medical_record)
             self.id_medical_records_hash_map[id] = medical_records
-
-
     
+    
+        
 if __name__ == "__main__":
     print(__doc__)
     start_time = datetime.datetime.now()
