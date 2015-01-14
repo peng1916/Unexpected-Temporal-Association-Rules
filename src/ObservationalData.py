@@ -15,9 +15,11 @@ class MedicalRecord:
     def __init__(self, id, func_date, prescription_records = None, diagnosis_records = None):
         
         self.__id = id
-
+        
         if type(func_date) is str:
             self.__func_date = datetime.datetime.strptime(func_date, "%Y-%m-%d")
+        elif type(func_date) is datetime.date:
+            self.__func_date = func_date
         elif type(func_date) is datetime.datetime:
             self.__func_date = func_date
 
@@ -36,6 +38,12 @@ class MedicalRecord:
 
     def get_func_date(self):
         return self.__func_date
+
+    def get_prescription_records(self):
+        return self.__prescription_records
+
+    def get_diagnosis_records(self):
+        return self.__diagnosis_records
     
     def add_prescription_record(self, prescription_record):
         
@@ -150,11 +158,15 @@ class LongitudeObservationalDatabase:
         
         # put keys and values to self.id_func_date_medical_record_hash_map
     	for row in sql_results:
+            drug_no = row[2].strip()
+            atc_code = self.drug_no_atc_code_hash_map.get(drug_no, None)
+            if atc_code is None:
+                continue
             id = row[0].strip()
             func_date = row[1]
             key = id + "," + str(func_date)
             medical_record = self.id_func_date_medical_record_hash_map.get(key, MedicalRecord(id, func_date))
-            medical_record.add_prescription_record(row[2].strip()) # drug_no
+            medical_record.add_prescription_record(atc_code) # atc_code
             self.id_func_date_medical_record_hash_map[key] = medical_record    
 
 

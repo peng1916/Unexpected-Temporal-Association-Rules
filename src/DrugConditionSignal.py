@@ -6,20 +6,21 @@ module name: DrugConditionSignal
 
 import sys
 import datetime
-import operator
 import IO as file_handler
 from ObservationalData import LongitudeObservationalDatabase
 from ObservationalData import MedicalRecord
+from operator import methodcaller
 
 class PatientHistory:
     
     def __init__(self, medical_records = None):   
-        self.__id = medical_records[0].get_id()
+
         if medical_records == None:
+            self.__id = None
             self.__medical_records = []
         else:
-            self.__medical_records = sorted(medical_records, key = operator.attrgetter('get_func_date'))
-    
+            self.__id = medical_records[0].get_id()
+            self.__medical_records = sorted(medical_records, key=methodcaller('get_func_date'))
     
     def get_id(self):
         return self.__id
@@ -33,7 +34,7 @@ class PatientHistory:
     def extract_func_dates(self):
         func_dates = []
         for medical_record in self.__medical_records:
-            func_dates.append(medical_record.func_date)
+            func_dates.append(medical_record.get_func_date())
         func_dates = sorted(list(set(func_dates)))	
         return func_dates
     
@@ -41,37 +42,48 @@ class PatientHistory:
     def extract_prescription_records(self): 
         prescription_records = []
         for medical_record in self.__medical_records:
-            prescription_records.extend(medical_record.prescription_records)
-        prescription_records = sorted(prescription_records)
+            prescription_records.extend(medical_record.get_prescription_records())
+        prescription_records = sorted(list(set(prescription_records)))
         return prescription_records
 	
 	
     def extract_diagnosis_records(self):
         diagnosis_records = []
         for medical_record in self.__medical_records:
-            diagnosis_records.extend(medical_record.diagnosis_records)
-        diagnosis_records = sorted(diagnosis_records)
+            diagnosis_records.extend(medical_record.get_diagnosis_records())
+        diagnosis_records = sorted(list(set(diagnosis_records)))
         return diagnosis_records
 	
-	
-    def extract_medical_records_before_a_date(self, date):
-        medical_records = []
+    def extract_diagnosis_records_before_a_date(self, date, day_delta):
+        diagnosis_records = []
+        start_date = date - datetime.timedelta(days = day_delta)
+        end_date = date
         for medical_record in self.__medical_records:
-            if medical_record.func_date < date:
-                medical_records.append(medical_record)
-            else:
-                break
-        return medical_records
-    
+            if (start_date < medical_record.get_func_date()) and (medical_record.get_func_date() < end_date):
+                diagnosis_records.extend(medical_record.get_diagnosis_records())
+        diagnosis_records = sorted(list(set(diagnosis_records)))
+        return diagnosis_records
 	
-    def extract_medical_records_after_a_date(self, date):
-        medical_records = []
-        start_index = -1
-        for i in range(0, len(self.__medical_records), 1):
-            if medical_record.func_date > date:
-                medical_records.append(medical_record)
-        return medical_records
+    def extract_diagnosis_records_after_a_date(self, date, day_delta):
+        diagnosis_records = []
+        start_date = date
+        end_date = date + datetime.timedelta(days = day_delta)
+        for medical_record in self.__medical_records:
+            if (start_date < medical_record.get_func_date()) and (medical_record.get_func_date() < end_date):
+                diagnosis_records.extend(medical_record.get_diagnosis_records())
+        diagnosis_records = sorted(list(set(diagnosis_records)))
+        return diagnosis_records
 
+    def detect_pairs(self):
+        func_dates = self.extract_func_dates()
+        for func_date in func_dates:
+            diagnosis_records_before = self.extract_diagnosis_records_before_a_date(func_date, 30)
+            diagnosis_records_after = self.extract_diagnosis_records_after_a_date(func_date, 30)
+            diagnosis_records = []
+            for diagnosis_record in diagnosis_records_after:
+                if not(diagnosis_record in diagnosis_records_before):
+                    diagnosis_records.append(diagnosis_record)
+            print "%s: %s" % (func_date.strftime('%Y-%m-%d'), ",".join(diagnosis_records))
 
 
 class DrugConditionSignal:
@@ -96,6 +108,7 @@ if __name__ == "__main__":
     print(__doc__)
     start_time = datetime.datetime.now()
 
+    
     lod = LongitudeObservationalDatabase()
     drug_condition_signal = DrugConditionSignal()
 
@@ -113,15 +126,18 @@ if __name__ == "__main__":
     for medical_records in lod.id_medical_records_hash_map.values():
         patient_history = PatientHistory(medical_records)
         drug_condition_signal.append_patient_history(patient_history)
-
+    
     for i in range(0, drug_condition_signal.number_of_patient_histories(), 1):	
         patient_history = drug_condition_signal.get_patient_history(i)
         medical_records = patient_history.get_medical_records()
         print "id = %s" % (patient_history.get_id())
         print "%d medical_records" % (len(medical_records))
+        print "%d prescriptions" % (len(patient_history.extract_prescription_records()))
+        print "%d diagnosis" % (len(patient_history.extract_diagnosis_records()))
+        patient_history.detect_pairs()
+        print "------------------------------------"
         #for medical_record in medical_records:
         #    medical_record.display()
-
     
     
     '''
@@ -132,18 +148,20 @@ if __name__ == "__main__":
         patient_history = PatientHistory(medical_records)
         drug_condition_signal.append_patient_history(patient_history)
 	
-    file_path = "../data/example_medical_records.csv"
+    file_path = "../data/test_medical_records.csv"
     file = open(file_path, "w")
     file.close()
     
     for i in range(0, 3, 1):	
         patient_history = drug_condition_signal.get_patient_history(i)
         medical_records = patient_history.get_medical_records()
+        medical_records = sorted(medical_records, key=methodcaller('get_func_date'))
         print "id = %s" % (patient_history.get_id())
         for medical_record in medical_records:
             medical_record.write(file_path)
             medical_record.display()
     '''
+
 
     end_time = datetime.datetime.now()
     print (end_time - start_time)
