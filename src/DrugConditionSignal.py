@@ -104,7 +104,23 @@ class DrugConditionSignal:
     
     def __init__(self):
         self.__patient_histories = []
+        self.__number_of_drug_condition_pair = 0
+        self.__drug_condition_pair_count_hash_map = {}
+        self.__drug_count_hash_map = {}
+        self.__condition_count_hash_map = {}
+        self.__drug_condition_pair_leverage_hash_map = {}
 
+    def get_drug_condition_pair_count_hash_map(self):
+        return self.__drug_condition_pair_count_hash_map
+
+    def get_drug_count_hash_map(self):
+        return self.__drug_count_hash_map
+
+    def get_condition_count_hash_map(self):
+        return self.__condition_count_hash_map
+
+    def get_drug_condition_pair_leverage_hash_map(self):
+        return self.__drug_condition_pair_leverage_hash_map
 
     def append_patient_history(self, patient_history):
         self.__patient_histories.append(patient_history)
@@ -117,18 +133,61 @@ class DrugConditionSignal:
     def number_of_patient_histories(self):
         return len(self.__patient_histories)
 
+    def build_count_hash_maps(self):
+        drug_condition_pair_count_hash_map = {}
+        for patient_history in self.__patient_histories:	
+            medical_records = patient_history.get_medical_records()
+            drug_condition_pairs = patient_history.detect_drug_condition_pairs()
+            for drug_condition_pair in drug_condition_pairs:
+                self.__number_of_drug_condition_pair += 1
+                drug = drug_condition_pair.split(",")[0]
+                condition = drug_condition_pair.split(",")[1]
+                # update self.__drug_condition_pair_count_hash_map
+                count = self.__drug_condition_pair_count_hash_map.get(drug_condition_pair, 0)
+                count += 1
+                self.__drug_condition_pair_count_hash_map[drug_condition_pair] = count
+                # update self.__drug_count_hash_map
+                count = self.__drug_count_hash_map.get(drug, 0)
+                count += 1
+                self.__drug_count_hash_map[drug] = count
+                # update self.__condition_count_hash_map
+                count = self.__condition_count_hash_map.get(condition, 0)
+                count += 1
+                self.__condition_count_hash_map[condition] = count
+
+    def build_leverage_hash_map(self):
+        number_of_drug_condition_pair = float(self.__number_of_drug_condition_pair)
+        for drug_condition_pair, drug_condition_pair_count in self.__drug_condition_pair_count_hash_map.items():
+            drug = drug_condition_pair.split(",")[0]
+            condition = drug_condition_pair.split(",")[1]
+            drug_condition_pair_count = float(drug_condition_pair_count)
+            drug_count = float(self.__drug_count_hash_map.get(drug, 0))
+            condition_count = float(self.__condition_count_hash_map.get(condition, 0))
+            leverage = (drug_condition_pair_count/number_of_drug_condition_pair) - (drug_count/number_of_drug_condition_pair)*(condition_count/number_of_drug_condition_pair)
+            self.__drug_condition_pair_leverage_hash_map[drug_condition_pair] = leverage
+            
+
+
+def write_hash_map_to_file(file_path, hash_map):
+    file = open(file_path, "w")
+    file.close()
+    
+    file = open(file_path, "a")
+    for key, value in hash_map.items():
+        file.write(str(key) + "," + str(value) + "\n")
+    file.close()
+
 
 if __name__ == "__main__":
     print(__doc__)
 
 
-    '''    
+    '''
+    print "fetch test data"
+    start_time = datetime.datetime.now()    
     lod = LongitudeObservationalDatabase()
-    drug_condition_signal = DrugConditionSignal()
-
     file_path = "../data/test_medical_records.csv"
-    col_names, row_names, data = file_handler.read_csv(file_path, has_header = False, has_row_names = False, are_numerical_data = False)
-    
+    col_names, row_names, data = file_handler.read_csv(file_path, has_header = False, has_row_names = False, are_numerical_data = False)    
     for i in range(0, (len(data) / 3), 1):
         id = data[i*3][0]
         func_date = data[i*3][1]
@@ -136,37 +195,37 @@ if __name__ == "__main__":
         diagnosis_records = data[(i*3+2)]
         medical_record = MedicalRecord(id, func_date, prescription_records, diagnosis_records)
         lod.add_medical_record_to_id_medical_records_hash_map(medical_record)
+    end_time = datetime.datetime.now()
+    print (end_time - start_time)
 
+    print "detect drug condition pairs"
+    start_time = datetime.datetime.now()
+    drug_condition_signal = DrugConditionSignal()    
     for medical_records in lod.id_medical_records_hash_map.values():
         patient_history = PatientHistory(medical_records)
         drug_condition_signal.append_patient_history(patient_history)
-    
-    drug_condition_pair_count_hash_map = {}
-    for i in range(0, drug_condition_signal.number_of_patient_histories(), 1):	
-        patient_history = drug_condition_signal.get_patient_history(i)
-        medical_records = patient_history.get_medical_records()
-        #print "id = %s" % (patient_history.get_id())
-        #print "%d medical_records" % (len(medical_records))
-        #print "%d prescriptions" % (len(patient_history.extract_prescription_records()))
-        #print "%d diagnosis" % (len(patient_history.extract_diagnosis_records()))
-        drug_condition_pairs = patient_history.detect_drug_condition_pairs()
-        for drug_condition_pair in drug_condition_pairs:
-            count = drug_condition_pair_count_hash_map.get(drug_condition_pair, 0)
-            count += 1
-            drug_condition_pair_count_hash_map[drug_condition_pair] = count
-        #print "------------------------------------"
-    
-    file_path = "../data/test_drug_condition_pairs.csv"
-    file = open(file_path, "w")
-    file.close()
+    drug_condition_signal.build_count_hash_maps()
+    drug_condition_signal.build_leverage_hash_map()
+    end_time = datetime.datetime.now()
+    print (end_time - start_time)
 
-    file = open(file_path, "a")
-    for drug_condition_pair, count in drug_condition_pair_count_hash_map.items():
-        print "%s: %d" % (drug_condition_pair, count)
-        file.write(drug_condition_pair + "," + str(count) + "\n")
-    file.close()
+    print "write results to files"
+    start_time = datetime.datetime.now()
+    write_hash_map_to_file(file_path = "../data/test_drug_condition_pair_count_table.csv", 
+                           hash_map = drug_condition_signal.get_drug_condition_pair_count_hash_map())
+    write_hash_map_to_file(file_path = "../data/test_drug_count_table.csv", 
+                           hash_map = drug_condition_signal.get_drug_count_hash_map())
+    write_hash_map_to_file(file_path = "../data/test_condition_count_table.csv", 
+                           hash_map = drug_condition_signal.get_condition_count_hash_map())
+    write_hash_map_to_file(file_path = "../data/test_drug_condition_pair_leverage_table.csv", 
+                           hash_map = drug_condition_signal.get_drug_condition_pair_leverage_hash_map())
+    end_time = datetime.datetime.now()
+    print (end_time - start_time)
     '''
+    
 
+
+    
     print "fetch data from database"
     start_time = datetime.datetime.now()    
     lod = LongitudeObservationalDatabase(str(sys.argv[1]), str(sys.argv[2]), str(sys.argv[3]), str(sys.argv[4]))
@@ -179,37 +238,25 @@ if __name__ == "__main__":
     for medical_records in lod.id_medical_records_hash_map.values():
         patient_history = PatientHistory(medical_records)
         drug_condition_signal.append_patient_history(patient_history)
-
-    drug_condition_pair_count_hash_map = {}
-    for i in range(0, drug_condition_signal.number_of_patient_histories(), 1):	
-        patient_history = drug_condition_signal.get_patient_history(i)
-        medical_records = patient_history.get_medical_records()
-        #print "id = %s" % (patient_history.get_id())
-        #print "%d medical_records" % (len(medical_records))
-        #print "%d prescriptions" % (len(patient_history.extract_prescription_records()))
-        #print "%d diagnosis" % (len(patient_history.extract_diagnosis_records()))
-        drug_condition_pairs = patient_history.detect_drug_condition_pairs()
-        for drug_condition_pair in drug_condition_pairs:
-            count = drug_condition_pair_count_hash_map.get(drug_condition_pair, 0)
-            count += 1
-            drug_condition_pair_count_hash_map[drug_condition_pair] = count
-        #print "------------------------------------"
+    drug_condition_signal.build_count_hash_maps()
+    drug_condition_signal.build_leverage_hash_map()
     end_time = datetime.datetime.now()
     print (end_time - start_time)
 
-    print "write drug condition pairs to files"
+    print "write results to files"
     start_time = datetime.datetime.now()
-    file_path = "../data/drug_condition_pairs.csv"
-    file = open(file_path, "w")
-    file.close()
-
-    file = open(file_path, "a")
-    for drug_condition_pair, count in drug_condition_pair_count_hash_map.items():
-        #print "%s: %d" % (drug_condition_pair, count)
-        file.write(drug_condition_pair + "," + str(count) + "\n")
-    file.close()
+    write_hash_map_to_file(file_path = "../data/drug_condition_pair_count_table.csv", 
+                           hash_map = drug_condition_signal.get_drug_condition_pair_count_hash_map())
+    write_hash_map_to_file(file_path = "../data/drug_count_table.csv", 
+                           hash_map = drug_condition_signal.get_drug_count_hash_map())
+    write_hash_map_to_file(file_path = "../data/condition_count_table.csv", 
+                           hash_map = drug_condition_signal.get_condition_count_hash_map())
+    write_hash_map_to_file(file_path = "../data/drug_condition_pair_leverage_table.csv", 
+                           hash_map = drug_condition_signal.get_drug_condition_pair_leverage_hash_map())
     end_time = datetime.datetime.now()
-    print (end_time - start_time)    
+    print (end_time - start_time)
+    
+
 	
     '''
     file_path = "../data/test_medical_records.csv"
