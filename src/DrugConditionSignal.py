@@ -74,16 +74,30 @@ class PatientHistory:
         diagnosis_records = sorted(list(set(diagnosis_records)))
         return diagnosis_records
 
-    def detect_pairs(self):
+    def detect_drug_condition_pairs(self):
         func_dates = self.extract_func_dates()
-        for func_date in func_dates:
+        drug_condition_pairs = []
+        for medical_record in self.__medical_records:
+            prescription_records = medical_record.get_prescription_records()
+            if len(prescription_records) == 0:
+                continue
+            func_date = medical_record.get_func_date()
             diagnosis_records_before = self.extract_diagnosis_records_before_a_date(func_date, 30)
             diagnosis_records_after = self.extract_diagnosis_records_after_a_date(func_date, 30)
             diagnosis_records = []
             for diagnosis_record in diagnosis_records_after:
                 if not(diagnosis_record in diagnosis_records_before):
                     diagnosis_records.append(diagnosis_record)
-            print "%s: %s" % (func_date.strftime('%Y-%m-%d'), ",".join(diagnosis_records))
+            if len(diagnosis_records) == 0:
+                continue
+            #print "%s; %s; %s" % (func_date.strftime('%Y-%m-%d'), ",".join(prescription_records), ",".join(diagnosis_records))
+
+            # combine prescription_records and diagnosis_records
+            for prescription_record in prescription_records:
+                for diagnosis_record in diagnosis_records:
+                    drug_condition_pairs.append(prescription_record + "," + diagnosis_record)
+        #drug_condition_pairs = list(set(drug_condition_pairs)) # person base
+        return drug_condition_pairs
 
 
 class DrugConditionSignal:
@@ -106,9 +120,9 @@ class DrugConditionSignal:
 
 if __name__ == "__main__":
     print(__doc__)
-    start_time = datetime.datetime.now()
 
-    
+
+    '''    
     lod = LongitudeObservationalDatabase()
     drug_condition_signal = DrugConditionSignal()
 
@@ -127,27 +141,77 @@ if __name__ == "__main__":
         patient_history = PatientHistory(medical_records)
         drug_condition_signal.append_patient_history(patient_history)
     
+    drug_condition_pair_count_hash_map = {}
     for i in range(0, drug_condition_signal.number_of_patient_histories(), 1):	
         patient_history = drug_condition_signal.get_patient_history(i)
         medical_records = patient_history.get_medical_records()
-        print "id = %s" % (patient_history.get_id())
-        print "%d medical_records" % (len(medical_records))
-        print "%d prescriptions" % (len(patient_history.extract_prescription_records()))
-        print "%d diagnosis" % (len(patient_history.extract_diagnosis_records()))
-        patient_history.detect_pairs()
-        print "------------------------------------"
-        #for medical_record in medical_records:
-        #    medical_record.display()
+        #print "id = %s" % (patient_history.get_id())
+        #print "%d medical_records" % (len(medical_records))
+        #print "%d prescriptions" % (len(patient_history.extract_prescription_records()))
+        #print "%d diagnosis" % (len(patient_history.extract_diagnosis_records()))
+        drug_condition_pairs = patient_history.detect_drug_condition_pairs()
+        for drug_condition_pair in drug_condition_pairs:
+            count = drug_condition_pair_count_hash_map.get(drug_condition_pair, 0)
+            count += 1
+            drug_condition_pair_count_hash_map[drug_condition_pair] = count
+        #print "------------------------------------"
     
-    
+    file_path = "../data/test_drug_condition_pairs.csv"
+    file = open(file_path, "w")
+    file.close()
+
+    file = open(file_path, "a")
+    for drug_condition_pair, count in drug_condition_pair_count_hash_map.items():
+        print "%s: %d" % (drug_condition_pair, count)
+        file.write(drug_condition_pair + "," + str(count) + "\n")
+    file.close()
     '''
+
+    print "fetch data from database"
+    start_time = datetime.datetime.now()    
     lod = LongitudeObservationalDatabase(str(sys.argv[1]), str(sys.argv[2]), str(sys.argv[3]), str(sys.argv[4]))
-    drug_condition_signal = DrugConditionSignal()
-    
+    end_time = datetime.datetime.now()
+    print (end_time - start_time)
+
+    print "detect drug condition pairs"
+    start_time = datetime.datetime.now()
+    drug_condition_signal = DrugConditionSignal()    
     for medical_records in lod.id_medical_records_hash_map.values():
         patient_history = PatientHistory(medical_records)
         drug_condition_signal.append_patient_history(patient_history)
+
+    drug_condition_pair_count_hash_map = {}
+    for i in range(0, drug_condition_signal.number_of_patient_histories(), 1):	
+        patient_history = drug_condition_signal.get_patient_history(i)
+        medical_records = patient_history.get_medical_records()
+        #print "id = %s" % (patient_history.get_id())
+        #print "%d medical_records" % (len(medical_records))
+        #print "%d prescriptions" % (len(patient_history.extract_prescription_records()))
+        #print "%d diagnosis" % (len(patient_history.extract_diagnosis_records()))
+        drug_condition_pairs = patient_history.detect_drug_condition_pairs()
+        for drug_condition_pair in drug_condition_pairs:
+            count = drug_condition_pair_count_hash_map.get(drug_condition_pair, 0)
+            count += 1
+            drug_condition_pair_count_hash_map[drug_condition_pair] = count
+        #print "------------------------------------"
+    end_time = datetime.datetime.now()
+    print (end_time - start_time)
+
+    print "write drug condition pairs to files"
+    start_time = datetime.datetime.now()
+    file_path = "../data/drug_condition_pairs.csv"
+    file = open(file_path, "w")
+    file.close()
+
+    file = open(file_path, "a")
+    for drug_condition_pair, count in drug_condition_pair_count_hash_map.items():
+        #print "%s: %d" % (drug_condition_pair, count)
+        file.write(drug_condition_pair + "," + str(count) + "\n")
+    file.close()
+    end_time = datetime.datetime.now()
+    print (end_time - start_time)    
 	
+    '''
     file_path = "../data/test_medical_records.csv"
     file = open(file_path, "w")
     file.close()
@@ -161,9 +225,5 @@ if __name__ == "__main__":
             medical_record.write(file_path)
             medical_record.display()
     '''
-
-
-    end_time = datetime.datetime.now()
-    print (end_time - start_time)
 	
 	
