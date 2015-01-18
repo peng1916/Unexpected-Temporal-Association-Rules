@@ -90,6 +90,8 @@ class LongitudeObservationalDatabase:
         self.password = password
         self.database_name = database_name
         self.database = None
+        self.years = [x for x in range(2004, 2009, 1)]
+        self.group_nos = [20]
 
         # key: <type: string> drug_no
         # value : <type: string> atc_code
@@ -151,42 +153,56 @@ class LongitudeObservationalDatabase:
 
 
     def add_prescription_records_to_id_func_date_medical_record_hash_map(self):
-        
-        # fetch prescription raw data
-        sql = "SELECT ID, Func_Date, Drug_No FROM Ambutory_OO2008_R20_Full"
-    	sql_results = self.fetch_data(sql)
-        
-        # put keys and values to self.id_func_date_medical_record_hash_map
-    	for row in sql_results:
-            drug_no = row[2].strip()
-            atc_code = self.drug_no_atc_code_hash_map.get(drug_no, None)
-            if atc_code is None:
-                continue
-            id = row[0].strip()
-            func_date = row[1]
-            key = id + "," + str(func_date)
-            medical_record = self.id_func_date_medical_record_hash_map.get(key, MedicalRecord(id, func_date))
-            medical_record.add_prescription_record(atc_code) # atc_code
-            self.id_func_date_medical_record_hash_map[key] = medical_record    
+
+        # clear self.id_func_date_medical_record_hash_map
+        self.id_func_date_medical_record_hash_map.clear()
+
+        for year in self.years:
+            for group_no in self.group_nos:
+                
+                table_name = "Ambutory_OO" + str(year) + "_R" + str(group_no) + "_Full"
+                # fetch prescription raw data
+                sql = "SELECT ID, Func_Date, Drug_No FROM " + table_name
+    	        sql_results = self.fetch_data(sql)
+                
+                # put keys and values to self.id_func_date_medical_record_hash_map
+    	        for row in sql_results:
+                    drug_no = row[2].strip()
+                    atc_code = self.drug_no_atc_code_hash_map.get(drug_no, None)
+                    if atc_code is None:
+                        continue
+                    id = row[0].strip()
+                    func_date = row[1]
+                    key = id + "," + str(func_date)
+                    medical_record = self.id_func_date_medical_record_hash_map.get(key, MedicalRecord(id, func_date))
+                    medical_record.add_prescription_record(atc_code) # atc_code
+                    self.id_func_date_medical_record_hash_map[key] = medical_record    
 
 
     def add_diagnosis_records_to_id_func_date_medical_record_hash_map(self):
-        
-        # fetch diagnosis raw data
-        sql = "SELECT ID, Func_Date, ACode_ICD9_1, ACode_ICD9_2, ACode_ICD9_3 FROM Ambutory_CD2008_R20"
-    	sql_results = self.fetch_data(sql)
-        
-        # put keys and values to self.id_func_date_medical_record_hash_map
-    	for row in sql_results:
-            id = row[0].strip()
-            func_date = row[1]
-            key = id + "," + str(func_date)
-            medical_record = self.id_func_date_medical_record_hash_map.get(key, MedicalRecord(id, func_date))
-            for i in range(2, 5, 1):
-                acode_icd9 = row[i].strip() # acode_icd9
-                if len(acode_icd9) > 0:
-                     medical_record.add_diagnosis_record(acode_icd9)
-            self.id_func_date_medical_record_hash_map[key] = medical_record    
+
+        # clear self.id_func_date_medical_record_hash_map
+        self.id_func_date_medical_record_hash_map.clear()
+
+        for year in self.years:
+            for group_no in self.group_nos:
+                
+                table_name = "Ambutory_CD" + str(year) + "_R" + str(group_no)
+                # fetch diagnosis raw data
+                sql = "SELECT ID, Func_Date, ACode_ICD9_1, ACode_ICD9_2, ACode_ICD9_3 FROM " + table_name
+    	        sql_results = self.fetch_data(sql)
+                
+                # put keys and values to self.id_func_date_medical_record_hash_map
+    	        for row in sql_results:
+                    id = row[0].strip()
+                    func_date = row[1]
+                    key = id + "," + str(func_date)
+                    medical_record = self.id_func_date_medical_record_hash_map.get(key, MedicalRecord(id, func_date))
+                    for i in range(2, 5, 1):
+                        acode_icd9 = row[i].strip() # acode_icd9
+                        if len(acode_icd9) > 0:
+                            medical_record.add_diagnosis_record(acode_icd9)
+                    self.id_func_date_medical_record_hash_map[key] = medical_record    
     
     
     def add_medical_record_to_id_medical_records_hash_map(self, medical_record):
