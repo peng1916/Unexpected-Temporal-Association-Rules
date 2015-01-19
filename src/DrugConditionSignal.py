@@ -13,14 +13,10 @@ from operator import methodcaller
 
 class PatientHistory:
     
-    def __init__(self, medical_records = None):   
+    def __init__(self, id, medical_records):
 
-        if medical_records == None:
-            self.__id = None
-            self.__medical_records = []
-        else:
-            self.__id = medical_records[0].get_id()
-            self.__medical_records = sorted(medical_records, key=methodcaller('get_func_date'))
+        self.__id = id
+        self.__medical_records = sorted(medical_records, key=methodcaller('get_func_date'))
     
     def get_id(self):
         return self.__id
@@ -100,7 +96,7 @@ class PatientHistory:
         return drug_condition_pairs
 
 
-class DrugConditionSignal:
+class UnexpectedDrugConditionSignal:
     
     def __init__(self):
         self.__patient_histories = []
@@ -122,6 +118,12 @@ class DrugConditionSignal:
     def get_drug_condition_pair_leverage_hash_map(self):
         return self.__drug_condition_pair_leverage_hash_map
 
+    def build_patient_histories(self, id_medical_records_hash_map):
+        del self.__patient_histories[:] # delete elements in self.__patient_histories
+        for id, medical_records in id_medical_records_hash_map.items():
+            patient_history = PatientHistory(id, medical_records)
+            self.__patient_histories.append(patient_history)
+
     def append_patient_history(self, patient_history):
         self.__patient_histories.append(patient_history)
 
@@ -133,10 +135,8 @@ class DrugConditionSignal:
     def number_of_patient_histories(self):
         return len(self.__patient_histories)
 
-    def build_count_hash_maps(self):
-        drug_condition_pair_count_hash_map = {}
-        for patient_history in self.__patient_histories:	
-            medical_records = patient_history.get_medical_records()
+    def build_count_hash_maps(self):        
+        for patient_history in self.__patient_histories:            
             drug_condition_pairs = patient_history.detect_drug_condition_pairs()
             for drug_condition_pair in drug_condition_pairs:
                 self.__number_of_drug_condition_pair += 1
@@ -180,51 +180,6 @@ def write_hash_map_to_file(file_path, hash_map):
 
 if __name__ == "__main__":
     print(__doc__)
-
-
-    '''
-    print "fetch test data"
-    start_time = datetime.datetime.now()    
-    lod = LongitudeObservationalDatabase()
-    file_path = "../data/test_medical_records.csv"
-    col_names, row_names, data = file_handler.read_csv(file_path, has_header = False, has_row_names = False, are_numerical_data = False)    
-    for i in range(0, (len(data) / 3), 1):
-        id = data[i*3][0]
-        func_date = data[i*3][1]
-        prescription_records = data[(i*3+1)]
-        diagnosis_records = data[(i*3+2)]
-        medical_record = MedicalRecord(id, func_date, prescription_records, diagnosis_records)
-        lod.add_medical_record_to_id_medical_records_hash_map(medical_record)
-    end_time = datetime.datetime.now()
-    print (end_time - start_time)
-
-    print "detect drug condition pairs"
-    start_time = datetime.datetime.now()
-    drug_condition_signal = DrugConditionSignal()    
-    for medical_records in lod.id_medical_records_hash_map.values():
-        patient_history = PatientHistory(medical_records)
-        drug_condition_signal.append_patient_history(patient_history)
-    drug_condition_signal.build_count_hash_maps()
-    drug_condition_signal.build_leverage_hash_map()
-    end_time = datetime.datetime.now()
-    print (end_time - start_time)
-
-    print "write results to files"
-    start_time = datetime.datetime.now()
-    write_hash_map_to_file(file_path = "../data/test_drug_condition_pair_count_table.csv", 
-                           hash_map = drug_condition_signal.get_drug_condition_pair_count_hash_map())
-    write_hash_map_to_file(file_path = "../data/test_drug_count_table.csv", 
-                           hash_map = drug_condition_signal.get_drug_count_hash_map())
-    write_hash_map_to_file(file_path = "../data/test_condition_count_table.csv", 
-                           hash_map = drug_condition_signal.get_condition_count_hash_map())
-    write_hash_map_to_file(file_path = "../data/test_drug_condition_pair_leverage_table.csv", 
-                           hash_map = drug_condition_signal.get_drug_condition_pair_leverage_hash_map())
-    end_time = datetime.datetime.now()
-    print (end_time - start_time)
-    '''
-    
-
-
     
     print "fetch data from database"
     start_time = datetime.datetime.now()    
@@ -234,43 +189,23 @@ if __name__ == "__main__":
 
     print "detect drug condition pairs"
     start_time = datetime.datetime.now()
-    drug_condition_signal = DrugConditionSignal()    
-    for medical_records in lod.id_medical_records_hash_map.values():
-        patient_history = PatientHistory(medical_records)
-        drug_condition_signal.append_patient_history(patient_history)
-    drug_condition_signal.build_count_hash_maps()
-    drug_condition_signal.build_leverage_hash_map()
+    udcs = UnexpectedDrugConditionSignal()    
+    udcs.build_patient_histories(lod.get_id_medical_records_hash_map())
+    udcs.build_count_hash_maps()
+    udcs.build_leverage_hash_map()
     end_time = datetime.datetime.now()
     print (end_time - start_time)
 
     print "write results to files"
     start_time = datetime.datetime.now()
-    write_hash_map_to_file(file_path = "../data/drug_condition_pair_count_table.csv", 
-                           hash_map = drug_condition_signal.get_drug_condition_pair_count_hash_map())
-    write_hash_map_to_file(file_path = "../data/drug_count_table.csv", 
-                           hash_map = drug_condition_signal.get_drug_count_hash_map())
-    write_hash_map_to_file(file_path = "../data/condition_count_table.csv", 
-                           hash_map = drug_condition_signal.get_condition_count_hash_map())
-    write_hash_map_to_file(file_path = "../data/drug_condition_pair_leverage_table.csv", 
-                           hash_map = drug_condition_signal.get_drug_condition_pair_leverage_hash_map())
+    write_hash_map_to_file(file_path = "../data/unexpected_drug_condition_pair_count_table.csv", 
+                           hash_map = udcs.get_drug_condition_pair_count_hash_map())
+    write_hash_map_to_file(file_path = "../data/unexpected_drug_count_table.csv", 
+                           hash_map = udcs.get_drug_count_hash_map())
+    write_hash_map_to_file(file_path = "../data/unexpected_condition_count_table.csv", 
+                           hash_map = udcs.get_condition_count_hash_map())
+    write_hash_map_to_file(file_path = "../data/unexpected_drug_condition_pair_leverage_table.csv", 
+                           hash_map = udcs.get_drug_condition_pair_leverage_hash_map())
     end_time = datetime.datetime.now()
     print (end_time - start_time)
     
-
-	
-    '''
-    file_path = "../data/test_medical_records.csv"
-    file = open(file_path, "w")
-    file.close()
-    
-    for i in range(0, 3, 1):	
-        patient_history = drug_condition_signal.get_patient_history(i)
-        medical_records = patient_history.get_medical_records()
-        medical_records = sorted(medical_records, key=methodcaller('get_func_date'))
-        print "id = %s" % (patient_history.get_id())
-        for medical_record in medical_records:
-            medical_record.write(file_path)
-            medical_record.display()
-    '''
-	
-	
