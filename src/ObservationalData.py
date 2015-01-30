@@ -33,6 +33,10 @@ class MedicalRecord:
         else:
             self.__diagnosis_records = set(diagnosis_records)
 
+    def __str__(self):
+        line = ",".join(self.__prescription_records) + " | " + ",".join(self.__diagnosis_records)
+        return line
+    
     def get_id(self):
         return self.__id
 
@@ -96,6 +100,14 @@ class LongitudeObservationalDatabase:
         # key: <type: string> drug_no
         # value : <type: string> atc_code
         self.__drug_no_atc_code_hash_map = {}
+
+        # key: <type: string> atc_code
+        # value : <type: string> medDRA
+        self.__atc_code_medDRA_hash_map = {}
+
+        # key: <type: string> icd9cm
+        # value : <type: string> umls_cid
+        self.__icd9cm_umls_cid_hash_map = {}
         
         # key: <type: string> id + "," + str(func_date)
         # value : <type: MedicalRecord>
@@ -118,6 +130,9 @@ class LongitudeObservationalDatabase:
 		                     passwd = self.__password, 
 		                     db = self.__database_name)
         self.build_drug_no_atc_code_hash_map()
+        self.build_atc_code_medDRA_hash_map()
+        self.build_icd9cm_umls_cid_hash_map()
+        self.__id_func_date_medical_record_hash_map.clear() # clear self.__id_func_date_medical_record_hash_map
         self.add_prescription_records_to_id_func_date_medical_record_hash_map()
         self.add_diagnosis_records_to_id_func_date_medical_record_hash_map()
         self.build_id_medical_records_hash_map()
@@ -155,9 +170,37 @@ class LongitudeObservationalDatabase:
         	self.__drug_no_atc_code_hash_map[drug_no] = atc_code
 
 
-    def add_prescription_records_to_id_func_date_medical_record_hash_map(self):
+    def build_atc_code_medDRA_hash_map(self):
+    	
+        # fetch drug code raw data
+        # ATC_Code: drug code in ATC coding system
+        # medDRA: drug code in MedDRA coding system
+    	sql = "SELECT ATC_Code, MedDRA FROM ATCCode_MedDRA"
+    	sql_results = self.fetch_data(sql)
         
-        self.__id_func_date_medical_record_hash_map.clear() # clear self.__id_func_date_medical_record_hash_map
+        # put keys and values to self.__atc_code_medDRA_hash_map
+    	for row in sql_results:
+        	atc_code = row[0].strip()
+        	medDRA = row[1].strip()
+        	self.__atc_code_medDRA_hash_map[atc_code] = medDRA
+
+
+    def build_icd9cm_umls_cid_hash_map(self):
+    	
+        # fetch drug code raw data
+        # ICD9CM: condition code in ICD9CM coding system
+        # UMLSCID: condition code in UMLS coding system
+    	sql = "SELECT ICD9CM, UMLSCID FROM ICD9CM_UMLSCID"
+    	sql_results = self.fetch_data(sql)
+        
+        # put keys and values to self.__icd9cm_umls_cid_hash_map
+    	for row in sql_results:
+        	icd9cm = row[0].strip()
+        	umls_cid = row[1].strip()
+        	self.__icd9cm_umls_cid_hash_map[icd9cm] = umls_cid
+
+
+    def add_prescription_records_to_id_func_date_medical_record_hash_map(self):
 
         for year in self.__years:
             for group_no in self.__group_nos:
@@ -173,11 +216,14 @@ class LongitudeObservationalDatabase:
                     atc_code = self.__drug_no_atc_code_hash_map.get(drug_no, None)
                     if atc_code is None:
                         continue
+                    medDRA = self.__atc_code_medDRA_hash_map.get(atc_code, None)
+                    if medDRA is None:
+                        continue
                     id = row[0].strip()
                     func_date = row[1]
                     key = id + "," + str(func_date)
                     medical_record = self.__id_func_date_medical_record_hash_map.get(key, MedicalRecord(id, func_date))
-                    medical_record.add_prescription_record(atc_code) # atc_code
+                    medical_record.add_prescription_record(medDRA) # medDRA
                     self.__id_func_date_medical_record_hash_map[key] = medical_record    
 
 
@@ -200,7 +246,14 @@ class LongitudeObservationalDatabase:
                     for i in range(2, 5, 1):
                         acode_icd9 = row[i].strip() # acode_icd9
                         if len(acode_icd9) > 0:
-                            medical_record.add_diagnosis_record(acode_icd9)
+						    if acode_icd9[0] == "E" or acode_icd9[0] == "V":
+						        acode_icd9 = acode_icd9[0:4] + "." + acode_icd9[4:]
+						    else:
+						        acode_icd9 = acode_icd9[0:3] + "." + acode_icd9[3:]
+						    umls_cid = self.__icd9cm_umls_cid_hash_map.get(acode_icd9, None)
+						    if umls_cid is not None:
+						        medical_record.add_diagnosis_record(umls_cid)
+                    #print str(medical_record)
                     self.__id_func_date_medical_record_hash_map[key] = medical_record    
     
     
@@ -231,9 +284,7 @@ if __name__ == "__main__":
     lod = LongitudeObservationalDatabase(str(sys.argv[1]), str(sys.argv[2]), str(sys.argv[3]), str(sys.argv[4]))
     end_time = datetime.datetime.now()
     print (end_time - start_time)
-    print "drug_no_atc_code_hash_map has %d items." % (len(lod.drug_no_atc_code_hash_map.items()))
-    print "id_func_date_medical_record_hash_map has %d items." % (len(lod.id_func_date_medical_record_hash_map.items()))
-    print "id_medical_records_hash_map has %d items." % (len(lod.id_medical_records_hash_map.items()))  
+    print "lod.get_id_medical_records_hash_map() has %d items." % (len(lod.get_id_medical_records_hash_map().items())) 
 
 
 

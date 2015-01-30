@@ -177,6 +177,30 @@ def write_hash_map_to_file(file_path, hash_map):
         file.write(str(key) + "," + str(value) + "\n")
     file.close()
 
+def write_table_to_file(file_path, hash_map):
+    drug_set = set()
+    condition_set = set()
+    
+    for drug_condition_pair, leverage in hash_map.items():
+        drug = drug_condition_pair.split(",")[0]
+        condition = drug_condition_pair.split(",")[1]
+        drug_set.add(drug)
+        condition_set.add(condition)
+    
+    drug_list = sorted(list(drug_set))
+    condition_list = sorted(list(condition_set))
+    
+    with open(file_path, "w") as file:
+        file.write("," + ",".join(condition_list) + "\n")
+        for drug in drug_list:
+            row = []
+            for condition in condition_list:
+                drug_condition_pair = drug + "," + condition
+                leverage = hash_map.get(drug_condition_pair, 0)
+                row.append(leverage)
+            file.write(drug + "," + ",".join([str(x) for x in row]) + "\n")
+
+
 
 if __name__ == "__main__":
     print(__doc__)
@@ -205,6 +229,8 @@ if __name__ == "__main__":
     write_hash_map_to_file(file_path = "../data/unexpected_condition_count_table.csv", 
                            hash_map = udcs.get_condition_count_hash_map())
     write_hash_map_to_file(file_path = "../data/unexpected_drug_condition_pair_leverage_table.csv", 
+                           hash_map = udcs.get_drug_condition_pair_leverage_hash_map())
+    write_table_to_file(file_path = "../data/leverage_table.csv", 
                            hash_map = udcs.get_drug_condition_pair_leverage_hash_map())
     end_time = datetime.datetime.now()
     print (end_time - start_time)
